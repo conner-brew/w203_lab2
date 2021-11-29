@@ -1,0 +1,120 @@
+---
+title: "HW week 12"
+author: "w203 teaching team"
+subtitle: 'w203: Statistics for Data Science'
+
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r load packages, message = FALSE}
+library(tidyverse)
+library(ggplot2) 
+
+library(sandwich)
+library(stargazer)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r source functions from project, echo = FALSE}
+source('./src/load_and_clean.R')
+source('./src/get_robust_se.R')
+```
+
+```{r load data} 
+d <- load_and_clean(input = 'videos.txt')
+```
+# Regression analysis of YouTube dataset
+
+You want to explain how much the quality of a video affects the number of views it receives on social media. In a world where people can now buy followers and likes, would such an investment increase the number of views that their content receives?  **This is a causal question.** 
+
+You will use a dataset created by Cheng, Dale and Liu at Simon Fraser University.  It includes observations about 9618 videos shared on YouTube.  Please see [this link](http://netsg.cs.sfu.ca/youtubedata/) for details about how the data was collected.
+
+You will use the following variables:
+
+- `views`: the number of views by YouTube users.
+- `average_rating`: This is the average of the ratings that the video received, it is a renamed feature from `rate` that is provided in the original dataset. (Notice that this is different from `count_of_ratings` which is a count of the total number of ratings that a video has received. 
+- `length:` the duration of the video in seconds.
+
+a. Perform a brief exploratory data analysis on the data to discover patterns, outliers, or wrong data entries and summarize your findings.
+
+```{r conduct EDA in this chunk}
+#The summary gives us an idea of schema as well as a general distribution
+print(summary(d))
+#Drop some character columns and columns and pre-transformed columns
+#(We will do our own transformations)
+d = subset(d, select = c(views, age,length, average_rating, count_of_ratings, comments))
+#Exploratory scatterplots to check for relationships, potential issues with colinearity, etc
+plot(d) 
+#Exploratory histogram of the target variable
+hist(d$views)
+#Exploratory histogram of transformed target variable
+hist(log(d$views))
+```
+
+> We can see that there are 9 observations with NAs in most columns; although this is a relatively small proportion of the overall observations and so may be dropped with the data with negligible impact on the analysis. We can also see that the scale for `views`, `length`, and `age` are substantially larger than those of other features, in addition to being highly left-skewed. The `uploader` and `category` features are both character features, and will need to be encoded if we want to use them as variables in modeling. 
+
+b. Based on your EDA, select an appropriate variable transformation (if any) to apply to each of your three variables.  You will fit a model of the type,
+
+
+
+$$
+  f(\text{views}) = \beta_0 + \beta_1 g(\text{rate})  + \beta_3 h(\text{length})
+$$ 
+
+Where $f$, $g$ and $h$ are sensible transformations, which might include making *no* transformation. 
+
+```{r fit a regression model here}
+#Fit model
+model <- lm(log(views + 1) ~ log(average_rating + 1) + log(length+1), data = d)
+
+ stargazer(
+   model, 
+   type = 'text', 
+   se = list(get_robust_se(model))
+   )
+```
+
+> Both the `views` and `length` features should be log-transformed to improve normality of distribution, as identified in EDA. 
+
+c. Using diagnostic plots, background knowledge, and statistical tests, assess all five assumptions of the CLM. When an assumption is violated, state what response you will take.  As part of this process, you should decide what transformation (if any) to apply to each variable. Iterate against your model until your satisfied that at least four of the five assumption have been reasonably addressed. 
+
+> 1. **IID Data:** In general, because the original data is a directed graph, it can be assumed that observations may be dependent on one another (because observations are derived from graph relationships with other observations.) Additionally, the original data was collected based on lists of "most viewed", "top rated", etc. which influences potential dependent relationships between individual observations. The utilization of a breadth-first methodology was likely an effort to address this concern, although this approach is still problematic due to the influence of past observations on future observations. With this in mind, there is not enough information in the given dataset to conclude with certainty IID. 
+
+> 2. **No Perfect Colinearity:** Through visual observation of plots generated in EDA, it is clear that there is no perfect colinearity between features. Although `log_of_average_rating` and `average_rating` are colinear, only one of the two (`log_of_average_rating`) is used as a feature in the model. Because there are no colinear features used as modeling variables, the data meets the assumption of no perfect colinearity for the purposes of modeling.
+
+> 3. **Linear Conditional Expectation:** Visual observation of scatterplots deciting the relationship between target variable `views` and features `average_rating` and `log(length)` demonstrate an apparent linear correlation between the features and target variables, so the data meets the assumption of linear conditional expectation.
+
+```{r code and plots assessing linear conditional expectation}
+#Basic scatterplot with smoothing line to check for possibility of linear
+#conditional expectation with regards to target variable and feature
+#`average_rating`
+ggplot(d, aes(y = log(views), x = average_rating)) +
+     geom_point() +
+     stat_smooth(method = "lm", col = "red") 
+
+#Basic scatterplot with smoothing line to check for possibility of linear
+#conditional expectation with regards to target variable and feature
+#`length`
+ggplot(d, aes(y = log(views), x = log(length))) +
+     geom_point() +
+     stat_smooth(method = "lm", col = "red")
+```
+
+> 4. **Homoskedastic Errors:** To test this assumption, we conducted a scale-location plot analysis. The scale-plot analysis, when the assumption is met, should produce a roughly horizontal line midway through the scatterplot of fitted vlues and residuals (standardized) wherein the distribution of points are evenly distributed above and below the line. Initially, we tested the model `lm(log(views+1) ~ log(length+1) + average_rating))` and found that the plot did not meet the assumption. However, upon revision of the model to `lm(log(views+1) ~ log(length+1) + log(average_rating+1))`, the plotted line was approximately horizontal with an even distribution of points, indicating that the revised model does meet the assumption for homoskedastic errors. 
+
+```{r code and plots assessing error variance}
+#Plot scale-location plot analysis chart
+plot(model, 3)
+```
+
+> 5. **Normally Distributed Errors:** To test the normal distribution of errors, we plotted a quantile-quantile plot (Q-Q plot) to visualize the quantiles of residuals versus theoretical quantiles of the fitted model. To meet the assumption, we are looking for a positive linear relationship between `x` and `y` with minimal outliers. The model achieves this, and therefore meets the assumption for normally distributed errors. 
+
+```{r code and plots assessing normally distributed errors}
+#Plot QQ plot to check for normally distributed errors
+plot(model, 2)
+```

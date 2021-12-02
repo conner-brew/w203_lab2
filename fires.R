@@ -1,5 +1,6 @@
 #install.packages("forecast")
 library(forecast)
+set.seed(123)
 
 #read data, subset months
 data <- read.csv('forestfires.csv')
@@ -27,6 +28,12 @@ data$log_rain <- log(data$rain + 1)
 #Write data
 write.csv(data, "forestfires_cleaned.csv")
 
+#Split the data into a test and training set at a 70/30 split
+sample_size <- floor(0.7 * nrow(data))
+train_indices <- sample(seq_len(nrow(data)), size = sample_size)
+train <- data[train_indices,]
+test <- data[-train_indices,]
+
 #model testing
-model1 <- lm(log_area ~ boxcox_ffmc + log_isi + log_RH + log_rain + wind + temp + DC + DMC + X + Y, data=data)
-model2 <- lm(log_area ~ boxcox_ffmc + ISI + log_RH + log_rain + wind + temp + DC + DMC + X + Y, data=data)
+model1 <- lm(log_area ~ boxcox_ffmc + log_isi + log_RH + log_rain + wind + temp + DC + DMC + X + Y, data=train)
+model2 <- lm(log_area ~ boxcox_ffmc + ISI + log_RH + log_rain + wind + temp + DC + DMC + X + Y, data=train)

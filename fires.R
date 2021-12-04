@@ -1,5 +1,9 @@
 #install.packages("forecast")
 library(forecast)
+library(patchwork)
+library(sandwich)
+library(lmtest)
+
 set.seed(123)
 
 #read data, subset months
@@ -34,6 +38,35 @@ train_indices <- sample(seq_len(nrow(data)), size = sample_size)
 train <- data[train_indices,]
 test <- data[-train_indices,]
 
+
+#EDA to visualize how the independent variables change versus how the dependent variable changes
+plot(data$log_area, data$log_rain)
+plot(data$log_area, data$bboxcox_ffmc)
+plot(data$log_area, data$log_isi)
+plot(data$log_area, data$log_RH)
+plot(data$log_area, data$wind)
+plot(data$log_area, data$temp)
+plot(data$log_area, data$DC)
+plot(data$log_area, data$DMC)
+plot(data$log_area, data$X)
+plot(data$log_area, data$Y)
+
 #model testing
-model1 <- lm(log_area ~ boxcox_ffmc + log_isi + log_RH + log_rain + wind + temp + DC + DMC + X + Y, data=train)
-model2 <- lm(log_area ~ boxcox_ffmc + ISI + log_RH + log_rain + wind + temp + DC + DMC + X + Y, data=train)
+
+model1 <- lm(log_area ~ wind + temp + log_rain, data=data)
+model2 <- lm(log_area ~ log_RH + wind + temp + log_rain, data=data)
+model3 <- lm(log_area ~ boxcox_ffmc + log_isi + log_RH + wind + temp + log_rain, data=data)
+model4 <- lm(log_area ~ boxcox_ffmc + log_isi + log_RH + wind + temp + DC + DMC + log_rain, data=data)
+model5 <- lm(log_area ~ boxcox_ffmc + log_isi + log_RH + wind + temp + DC + DMC + X + Y + log_rain, data=data)
+
+anova(model1, model2)
+anova(model1, model3)
+anova(model1, model4)
+anova(model1, model5)
+
+
+coeftest(model1, vcov =  vcovHC)
+coeftest(model2, vcov =  vcovHC)
+coeftest(model3, vcov =  vcovHC)
+coeftest(model4, vcov =  vcovHC)
+coeftest(model5, vcov =  vcovHC)

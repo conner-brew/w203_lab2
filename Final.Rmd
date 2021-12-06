@@ -1,5 +1,5 @@
 ---
-title: "Investigating the Effect of Weather Coniditions on Forest Fire Burn Area"
+title: "Investigating the Effect of Weather Conditions on Forest Fire Burn Area"
 author: "Conner Brew, Radhika Mardikar, Sho Tsuyuki"
 output:
   pdf_document: default
@@ -12,6 +12,8 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 
 
 ```{r import libraries, echo=FALSE}
+install.packages("forecast")
+install.packages("corrplot")
 library(forecast)
 library(patchwork)
 library(sandwich)
@@ -57,7 +59,7 @@ Deadly wildfires have wreaked havoc across the globe in recent years, and Portug
 
 The dataset is available from the UC Irvine Machine Learning Repository. The data was collected from January 2000 to December 2003 and it was built using two sources. The first data set was collected by the inspector for the Montesinho fire. Several features were registered in the data collection – location, time, date, four FWI metrics, and the total burned area. The second data set was collected by the Bragança Polytechnic Institute. Weather observations, such as wind speed, temperature, rain, and relative humidity, recorded in 30 minute periods by a meteorological station in Montesinho Park were stored and used to generate the final dataset used in this analysis.
 
-The features in the dataset are Fine Fuel Moisture Code (`FFMC`), Duff Moisture Code (`DMC`), Drought Code (`DC`), Initial Spread Index (`ISI`), `temperature`, rain accumulatio (`rain`), relative humidity (`RH`), and wind speed (`wind`). The `FFMC` denotes the moisture content of surface litter and is a measure of ease of ignition. The `DMC` and `DC` measure the moisture content of shallow and deep organic layers, which reflects the effect of seasonal drought. The `ISI` depends on wind speed and denotes the expected rate of fire spread. Although there are different scales for each of the FWI elements, higher values of each suggest drier conditions and therefore more severe burns.
+The features in the dataset are Fine Fuel Moisture Code (`FFMC`), Duff Moisture Code (`DMC`), Drought Code (`DC`), Initial Spread Index (`ISI`), `temperature`, rain accumulation (`rain`), relative humidity (`RH`), and wind speed (`wind`). The `FFMC` denotes the moisture content of surface litter and is a measure of ease of ignition. The `DMC` and `DC` measure the moisture content of shallow and deep organic layers, which reflects the effect of seasonal drought. The `ISI` depends on wind speed and denotes the expected rate of fire spread. Although there are different scales for each of the FWI elements, higher values of each suggest drier conditions and therefore more severe burns.
 
 # Model Building Process 
 
@@ -73,7 +75,7 @@ For the same reasons, we applied a log transformation to the features as follows
 
 ## Exploratory Data Analysis/Transformations
 
-After the initial data cleaning, we plotted some initial data that we expect to have the biggest impact on wildfires. Given the scale of the variables and the trends, we applied the appropriate transformations. For example, we plotted the log of the dependent variable `area`  on the Y axis and the independent variable of interest such as `temperature`, `RH`, `FFMC`, and `wind` with the appropriate transformations on the X axis. 
+After the initial data cleaning, we plotted some data that we expect to have the biggest impact on wildfires. Given the scale of the variables and the trends, we applied the appropriate transformations. For example, we plotted the log of the dependent variable `area`  on the Y axis and the independent variable of interest such as `temperature`, `RH`, `FFMC`, and `wind` with the appropriate transformations on the X axis. 
 
 ```{r EDA plots, fig.show="hold", out.width="33%", echo=FALSE}
 temp_plot <-ggplot(data, aes(x=temp, y=log_area)) + geom_point() +     geom_smooth(method=lm)
@@ -114,6 +116,12 @@ model5 <- lm(log_area ~ boxcox_ffmc + log_isi + log_RH + wind + temp + DC + DMC 
 
 Our initial model attempt eschews all variables which are not direct measurements of weather conditions. This model includes `wind`, `temperature`, and `rain`. This model (model 1) alone did not reveal a significant indication of causation between weather features and area burned, so subsequent models (models 2, 3, 4) added more variables to seek features which may influence the amount of area burned. The longest model (model 5), which contained all the variables in the dataset, was compared to each of the smaller models in an ANOVA test to determine whether any subgroup of the variables was deterministic enough of the area burned. 
 The results of the ANOVA test are summarized below (p-values):
+```{r ANOVA test, echo=FALSE, message =FALSE, results ="hide"}
+anova(model5, model1)
+anova(model5, model2)
+anova(model5, model3)
+anova(model5, model4)
+```
 
 |Table 1: ANOVA Test Results|
 |-----|---------|------|---------|--------|
@@ -121,8 +129,8 @@ The results of the ANOVA test are summarized below (p-values):
 |**Model 5**| 0.5196| 0.4336| 0.3381| 0.1795|
 
 
-A significant p-value (<0.05) indicates that the shorter model is a better estimator than the longer model. An insignificant value indicates the longer model is better. From this ANOVA test, it is clear that the models with fewer variables are not robust predictors of the dependent variable.
-Model 5, the longest model, seemed to be the most promising one. The table below shows the regression table of model 5.
+A significant p-value (<0.05) indicates that the shorter model is a better estimator than the longer model. An insignificant value indicates the longer model is better. From these ANOVA tests, it is clear that the models with fewer variables are not robust predictors of the dependent variable.
+Model 5, the longest model, seemed to be the most promising one. Table 2 shows the regression table of model 5.
 
 ```{r regression table, results="asis", echo=FALSE}
 stargazer(
@@ -133,7 +141,9 @@ stargazer(
    )
 ```
 
-Following analysis of the regression table, we performed a t-test of coefficients of model 5 to determine significance of the individual coefficients.
+
+
+We performed a t-test of coefficients of model 5 to determine significance of the individual coefficients (Table 3). It is apparent that no variable is a statistically significant predictor of area burned in the August/September time-frame.
 
 ```{r t test, fig.align = 'center', results= "asis", echo=FALSE}
 ct <- coeftest(model5, vcov =  vcovHC)
@@ -143,7 +153,9 @@ stargazer(ct,
           header=FALSE)
 ```
 
-From this table, it is apparent that no variable is a statistically significant predictor of area burned in the August/September time-frame. Intuitive logic and linear trends observed in exploratory analysis indicate that weather conditions should have an effect on forest fires. Therefore, we concluded that additional data collection is necessary to fully evaluate the effect of environmental factors on fires and amount of burned area.
+
+
+Intuitive logic and linear trends observed in exploratory analysis indicate that weather conditions should have an effect on forest fires. Therefore, we concluded that additional data collection is necessary to fully evaluate the effect of environmental factors on fires and amount of burned area.
 
 # Limitations
 
@@ -190,11 +202,20 @@ The modeling process was likely influenced by the omission of multiple variables
 
 Air pressure is an omitted variable in this dataset. Air pressure is an important indicator of weather conditions and affects `wind`, `ISI`, and other measurement factors that were included in the analysis. Going hand in hand with air pressure is elevation, which also affects the propensity of the given area to burn. In general, higher air pressures are associated with more dry and sunny conditions while lower air pressures are associated with rainy or stormy conditions. Based on this, air pressure should be positively correlated with the dependent variable. The direction of the bias is away from zero.
 
+Vegetation and land cover, due to its absence, introduces omitted variable bias. Tree density has a positive linear relationship with area of fire burn, as the proximity between trees or other fire-susceptible foliage increases the capability of the fire to spread from plant to plant. Lower tree density would in turn have an effect of reducing overall burn area. Because there is a positive correlation between vegetation and burn area as well as a positive correlation between `ISI`, `FFMC`, and vegetation, there would be a resulting positive bias away from zero which overestimates the coefficient associated with the included variables.
+
 The slope of the land also introduces omitted variable bias due to the fact that it affects the sparsity or denseness of vegetation along the land and also influences the `ISI` which measures the spread of fire. The slope of land is negatively correlated with vegetation growth in that a greater slope is less likely to have more dense vegetation. Depending on other factors such as elevation, slope may also be negatively correlated with the amount of area burned by a forest fire, so the direction of bias is towards zero. 
 
-Vegetation and land cover, due to its absence, introduces omitted variable bias. Tree density has a positive linear relationship with area of fire burn, as the proximity between trees or other fire-susceptible foliage increases the capability of the fire to spread from plant to plant. Lower tree density would in turn have an effect of reducing overall burn area. Because there is a positive correlation between vegetation and burn area as well as a positive correlation between `ISI`, `FFMC`, and vegetation, there would be a resulting positive bias away from zero which overestimates the coefficient associated with the included variables.
 
 # Conclusion
 
-The purpose of this study is to determine the causality of weather conditions on the amount of burned area in Montesinho in the August/September time frame. Based on our exploratory data analysis and statistical analysis, there is no clear effect of any of the independent variables on the dependent variable (`area`). Since this result does does not align with the linear expectation observed between the target variables and the independent variables and is also counter to intuitive logic regarding the relationship between forest fires and environmental conditions, we propose conducting this study in the future with a more comprehensive dataset. 
+The purpose of this study is to determine the causality of weather conditions on the amount of burned area in Montesinho in the August/September time frame. Based on our exploratory data analysis and statistical analysis, there is no clear effect of any of the independent variables on the dependent variable (`area`). Since this result does not align with the linear expectation observed between the target variables and the independent variables and is also counter intuitive regarding the relationship between forest fires and environmental conditions, we propose conducting this study in the future with a more comprehensive dataset. 
 
+
+# References
+Canada, Natural Resources. “Canadian Wildland Fire Information System: Canadian Forest Fire 
+Weather Index (FWI) System.” Canadian Wildland Fire Information System | Canadian Forest Fire Weather Index (FWI) System, https://cwfis.cfs.nrcan.gc.ca/background/summary/fwi. 
+
+Cortez, P., & Morais, A. (2007). A Data Mining Approach to Predict Forest Fires using Meteorological Data. Department of Information Systems, R&D Algoritmi Centre, University of Minho. http://www3.dsi.uminho.pt/pcortez/fires.pdf
+
+Data: https://archive.ics.uci.edu/ml/datasets/forest+fires
